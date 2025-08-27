@@ -1,19 +1,25 @@
 Clear-Host
-Write-Host @"
+function Show-Menu {
+    Clear-Host
+    Write-Host @"
  |\/\/\/|  
  |      |  
  |      |  
  | (o)(o)  
- C      _)  maked by bridgezan
+ C      _)  
   | ,___|  
   |   /    
  /____\    
 /      \ 
 "@
-Write-Host "1. EXE Loader" -ForegroundColor Cyan
-Write-Host "2. DLL Loader" -ForegroundColor Yellow
-$choice = Read-Host "`nSelect an option (1/2)"
+    Write-Host "1. EXE Loader" -ForegroundColor Cyan
+    Write-Host "2. DLL Loader" -ForegroundColor Yellow
+    Write-Host "3. Exit" -ForegroundColor Red
+}
 
+while ($true) {
+    Show-Menu
+    $choice = Read-Host "`nSelect an option (1/2/3)"
 
 function Rename-And-Delete {
     param ([string]$filePath)
@@ -118,7 +124,7 @@ if ($choice -eq "1") {
     sc.exe start SysMain | Out-Null; Write-Host "[*] SysMain service started" -ForegroundColor Cyan
     Remove-BamRegistryEntries -adsName "svchost.exe"
     Write-Host "`n[+] EXE Loader operation completed" -ForegroundColor Green
-    Read-Host "Press Enter to exit"
+    Read-Host "`nPress Enter to return to menu"
 }
 
 
@@ -186,8 +192,15 @@ elseif ($choice -eq "2") {
     Write-Host "[*] SysMain service started" -ForegroundColor Cyan
     Remove-BamRegistryEntries -adsName "svchost.exe"
     Write-Host "`n[+] DLL Loader operation completed" -ForegroundColor Green
-    Read-Host "Press Enter to exit"
+    Read-Host "`nPress Enter to return to menu"
+    
+    elseif ($choice -eq "3") {
+        Write-Host "`nExiting..." -ForegroundColor Red
+        break
+    }
+    else {
+        Write-Host "[!] Invalid choice. Try again..." -ForegroundColor Red
+        Start-Sleep -Seconds 2
+    }
 }
-else {
-    Write-Host "[!] Invalid choice. Exiting..." -ForegroundColor Red
 }
